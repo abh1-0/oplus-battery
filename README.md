@@ -1,7 +1,7 @@
 # Disable_Servers_Save_Battery 🔋❄️
 
 A premium, performance-oriented Magisk/APatch module designed specifically to tackle severe battery drain, high idle consumption, and CPU heating issues on **ColorOS / OxygenOS 16** (Android 16) devices, optimized for **MediaTek Dimensity** platforms.
-
+<img width="1774" height="887" alt="ChatGPT Image May 17, 2026, 09_35_41 AM" src="https://github.com/user-attachments/assets/da48877d-9215-429e-829d-d667d121251e" />
 ---
 
 ## 🌟 Core Features
