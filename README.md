@@ -324,8 +324,7 @@ For updates, support, and future optimization modules:
 | Role | Name |
 |---|---|
 | Developer | Ayan (@imnotaino) |
-| Framework | MMT-Extended |
-| Target OS | ColorOS / OxygenOS 16 |
+| Target OS | ColorOS 16 / OxygenOS 16 |
 | Optimized For | MediaTek Dimensity |
 
 ---
