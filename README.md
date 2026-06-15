@@ -1,8 +1,9 @@
 <div align="center">
 
+<img width="1280" height="640" alt="image" src="https://github.com/user-attachments/assets/a8fec90a-6e0f-4a6f-bac2-be90e991684a" />
 <img width="1774" height="887" alt="Disable Servers Save Battery" src="https://github.com/user-attachments/assets/da48877d-9215-429e-829d-d667d121251e" />
 
-<img src="https://img.shields.io/badge/DisableServers-v1.5-blueviolet?style=for-the-badge&logo=android" alt="DisableServers"/>
+<img src="https://img.shields.io/badge/DisableServers-v1.9_Stable-blueviolet?style=for-the-badge&logo=android" alt="DisableServers"/>
 <br/>
 <img src="https://img.shields.io/badge/ColorOS%20%7C%20OOS16-Supported-brightgreen?style=for-the-badge"/>
 <img src="https://img.shields.io/badge/MediaTek-Dimensity-orange?style=for-the-badge"/>
@@ -29,31 +30,31 @@ Most Android 16 OPLUS ports suffer from terrible idle drain, random heating, ove
 The funny part?
 The ROM itself usually isn't the main issue.
 
-The real battery killer is the amount of hidden:
-- telemetry services
-- analytics frameworks
+The real battery killer is the massive amount of hidden:
+- telemetry services & AI engines
 - MediaTek debug daemons
 - logging servers
+- crash tracers
 - update agents
-- network monitor services
+- UI tracking services
 
 running silently in the background 24/7.
 
 These services constantly:
 - wake CPU cores
-- spam logs to storage
+- spam network requests
 - increase thermal load
 - trigger unnecessary wakelocks
-- reduce deep sleep time
+- ruin deep sleep
 
-This module disables them cleanly and system-lessly without modifying `/system`.
+This module targets and disables them cleanly using native Linux `SIGSTOP` scripts and system-less mounting, without breaking your ROM.
 
 Result:
 - cooler idle temperatures
 - smoother performance
-- reduced standby drain
-- better deep sleep
-- less random lag spikes
+- massively reduced standby drain
+- superior deep sleep
+- fewer random lag spikes
 - lower storage write cycles
 
 ---
@@ -62,68 +63,61 @@ Result:
 
 | Feature | Description |
 |---|---|
-| 🚫 **MediaTek Logger Killer** | Blocks heavy MTK debug daemons completely |
-| 🔋 **Battery Optimization** | Reduces idle drain & overnight battery loss |
-| ❄️ **Cooler Temperatures** | Stops hidden CPU wakeups causing heating |
-| 🛡️ **Telemetry Blocker** | Disables OPLUS analytics & tracking services |
-| ⚡ **Performance Stability** | Less background load = smoother UI |
+| 🚫 **MediaTek Logger Killer** | Blocks heavy MTK debug & modem daemons completely |
+| 🧠 **AI Daemon Freezing** | Forcefully suspends aggressive `midas` & `oplus_gaia` AI trackers |
+| 🔋 **Battery Optimization** | Plugs the leaks causing overnight battery drain |
+| ❄️ **Cooler Temperatures** | Stops hidden CPU wakeups that cause random heating |
+| 🛡️ **Massive Telemetry Purge** | Shuts down over 12 hidden OPlus analytics services |
+| 📊 **Action Menu Diagnostics** | Tap the Magisk Action button for an instant live hardware readout |
 | 📱 **Dimensity Optimized** | Specifically tuned for MediaTek platforms |
-| 🔧 **System-less Mounting** | No direct `/system` modification |
-| 🚀 **Safe Removal** | Fully removable anytime |
+| 🔧 **System-less** | No direct `/system` modification |
 
 ---
 
-# 🚫 MediaTek Logger Block
+# 🚫 Native Daemon Block & Freeze
 
-The module replaces several MediaTek logging binaries using zero-byte system-less mounts.
+The module tackles heavy background processes using two methods: zero-byte system-less mounts, and boot-time `killall -STOP` freezing. 
 
-These loggers are infamous for:
-- constant CPU usage
-- modem wakeups
-- huge log generation
-- thermal spikes
-- storage spam
-
-Blocked binaries:
+These daemons are infamous for constant CPU usage, thermal spikes, and storage spam:
 
 ```bash
+# MediaTek Network & Modem Loggers
 /system_ext/bin/connsyslogger
 /system_ext/bin/mobile_log_d
 /system_ext/bin/emdlogger
+
+# OPlus AI Performance & Analytics
+/system_ext/bin/midasd
+/system_ext/bin/oplus_gaia
+/vendor/bin/hw/vendor.oplus.hardware.cammidasservice-V1-service
+
+# OPlus Crash Tracing & UI Tracking
+/system_ext/bin/oplus_theia
+/system_ext/bin/theia_screen_monitor
+/system_ext/bin/opluscvtmanager
+/system_ext/bin/phoenix_log_manager
+/system_ext/bin/ostatsd
 ```
 
-The module also overrides their init `.rc` scripts inside:
-
-```bash
-/system_ext/etc/init/
-```
-
-so Android `init` never registers or launches them again after boot.
-
-This massively reduces background activity on Dimensity devices.
+Because OPlus tries to aggressively restart these services when killed, **v1.9** utilizes a powerful permanent suspension script during boot so Android `init` never realizes they are disabled.
 
 ---
 
-# 🛡️ Telemetry & Background Services Disabled
+# 🛡️ Telemetry & APK Bloat Disabled
 
-Several hidden OPLUS services are disabled globally during boot.
-
-These services constantly run in background even when the phone is idle.
+Several hidden OPLUS apps are disabled globally during boot. Most users never even open these apps/services, yet they continuously consume resources.
 
 | Package | Purpose |
 |---|---|
 | `com.debug.loggerui` | MTK Logger Control |
-| `com.oplus.nas` | Oppo Network Assistant |
 | `com.oplus.olc` | OPLUS Log Center |
 | `com.oplus.sau` | System App Updater |
 | `com.oplus.romupdate` | ROM Update Service |
-| `com.oplus.nhs` | Network Health Service |
-| `com.oplus.trafficmonitor` | Traffic Monitor |
 | `com.nearme.instant.platform` | Instant Apps Platform |
 | `com.oplus.appsense` | Usage Analytics |
 | `com.oplus.appplatform` | OPLUS Framework |
-
-Most users never even open these apps/services, yet they continuously consume resources.
+| `com.oplus.onetrace` | OTrace Telemetry |
+| `com.oplus.powermonitor` | Useless background stats tracker |
 
 This module freezes them automatically during boot.
 
@@ -157,9 +151,9 @@ This prevents unnecessary framework spam and excessive storage writes.
 
 # 📦 What the module modifies
 
-The module only mounts overlays and runtime props.
+The module only mounts overlays, runtime props, and executes boot-scripts.
 
-It does NOT modify:
+It does NOT permanently modify:
 - `/system`
 - `/vendor`
 - `/product`
@@ -174,8 +168,8 @@ Everything is:
 
 # 📋 Requirements
 
-- Android 16
-- ColorOS / OxygenOS 16
+- Android 14 / 15 / 16
+- ColorOS / OxygenOS 15 / 16
 - MediaTek Dimensity chipset
 - Magisk / KernelSU / APatch
 - Unlocked bootloader
@@ -184,7 +178,7 @@ Everything is:
 
 # 🚀 Installation
 
-1. Download latest `Disable_Servers_Save_Battery.zip`
+1. Download latest `Disable_Servers_Save_Battery_v1.9.zip`
 2. Open:
    - Magisk
    - KernelSU
@@ -197,60 +191,7 @@ Everything is:
 After successful installation:
 - Telegram channel opens automatically
 - Boot scripts apply optimizations during startup
-
----
-
-# 🖥️ Flash Preview
-
-```text
-╔══════════════════════════════════════╗
-║     Disable_Servers_Save_Battery     ║
-║         Battery Optimization          ║
-╚══════════════════════════════════════╝
-
-  Developer : Ayan (@imnotaino)
-  Channel   : t.me/colorosmodules
-
-  Flash Time : 2026-05-18 11:47:36
-
-──────────────────────────────────────
-          ★  Device  Info  ★
-──────────────────────────────────────
-  Device  : realme Narzo 60x
-  Codename: ossi
-  Android : 16  (SDK 36)
-  Build   : RMX3782_16.0.0.xxx
-  Kernel  : 5.15.x
-  Battery : 84%
-──────────────────────────────────────
-
-  ► Initialising environment...
-  ► Verifying root access...
-  ► Mounting logger overrides...
-  ► Disabling telemetry services...
-  ► Applying power-saving props...
-  ► Freezing OPLUS background agents...
-  ► Cleaning temporary files...
-
-══════════════════════════════════════
- ✓ Disable_Servers_Save_Battery Ready!
-══════════════════════════════════════
-
-  ➤  t.me/colorosmodules
-
-  Made with ♥ by Ayan (@imnotaino)
-```
-
----
-
-# ⚙️ OTA Updates
-
-The module supports:
-- Magisk updateJson
-- OTA-style update checks
-- automatic version tracking
-
-Future updates can be delivered directly through Magisk app.
+- **New:** Use the Magisk Action button on the module tab to trigger a live battery/hardware diagnostic check!
 
 ---
 
@@ -258,56 +199,37 @@ Future updates can be delivered directly through Magisk app.
 
 ## Q: Will this improve battery life?
 
-Yes.
-Especially on MediaTek Dimensity devices where loggers and telemetry are extremely aggressive.
+Yes. Especially on MediaTek Dimensity devices running OPlus ports, where loggers, AI analytics, and telemetry are extremely aggressive.
 
 ---
 
 ## Q: Will notifications break?
 
-No.
-
-The module does NOT touch:
-- Google Play Services
-- Android notification framework
-- FCM services
+No. The module does NOT touch Google Play Services, the Android notification framework, or FCM services. Gaming networks (`nas`, `nhs`) are strictly preserved.
 
 ---
 
 ## Q: Can this break OTA updates?
 
-No.
-Everything is system-less.
+No. Everything is system-less.
 
 ---
 
 ## Q: Why does this reduce heating?
 
-Because hidden services continuously wake CPU cores even while idle.
-
-Stopping them reduces:
-- background scheduling
-- thermal load
-- storage writes
-- wakelocks
+Because hidden services continuously wake CPU cores and read network states even while idle. Stopping them reduces background scheduling, thermal load, storage writes, and wakelocks.
 
 ---
 
 ## Q: Does this work on Snapdragon?
 
-Partially.
-
-But the module is mainly optimized for MediaTek Dimensity platforms.
+Partially. But the module is heavily optimized for MediaTek Dimensity and OPlus specific daemons.
 
 ---
 
 ## Q: Can I uninstall safely?
 
-Yes.
-
-Disable/remove the module and reboot.
-
-Everything reverts automatically.
+Yes. Disable/remove the module and reboot. Everything reverts automatically.
 
 ---
 
@@ -315,7 +237,7 @@ Everything reverts automatically.
 
 For updates, support, and future optimization modules:
 
-### 👉 https://t.me/colorosmodules
+### 👉 [t.me/colorosmodules](https://t.me/colorosmodules)
 
 ---
 
@@ -324,7 +246,7 @@ For updates, support, and future optimization modules:
 | Role | Name |
 |---|---|
 | Developer | Ayan (@imnotaino) |
-| Target OS | ColorOS 16 / OxygenOS 16 |
+| Target OS | ColorOS 15/16 & OxygenOS 15/16 |
 | Optimized For | MediaTek Dimensity |
 
 ---
@@ -333,6 +255,6 @@ For updates, support, and future optimization modules:
 
 ### Made with ♥ by Ayan (@imnotaino)
 
-t.me/colorosmodules
+[t.me/colorosmodules](https://t.me/colorosmodules)
 
 </div>
