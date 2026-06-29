@@ -1,0 +1,1031 @@
+#!/system/bin/sh
+# Debloater - Oppo/ColorOS (CN) by Ox1d3x3
+# Version v0.9.4
+
+MOD_NAME="Debloater - Oppo/ColorOS (CN) by Ox1d3x3"
+MID="debloater_systemless_x1"
+# Read version from module.prop if possible (keeps WebUI/terminal consistent)
+MOD_VER=""
+for base in /data/adb/modules /data/adb/ksu/modules /data/adb/apatch/modules; do
+  p="$base/${MID}/module.prop"
+  if [ -f "$p" ]; then MOD_VER="$(grep -m1 '^version=' "$p" 2>/dev/null | cut -d= -f2-)"; break; fi
+done
+[ -z "$MOD_VER" ] && MOD_VER="v0.9.4"
+LIST_DIR="/sdcard/debloater"
+DEBUG_LOG="$LIST_DIR/debloater_debug.log"
+MODULE_ID="debloater_systemless_x1"
+
+# Root manager hint (best-effort; used for debugging only)
+detect_root_manager() {
+  # KernelSU
+  if command -v ksu >/dev/null 2>&1 || [ -d /data/adb/ksu ] || [ -d /data/adb/ksu/modules ]; then
+    echo "KernelSU"
+    return
+  fi
+  # APatch (best-effort paths)
+  if [ -d /data/adb/apatch ] || [ -d /data/adb/apatch/modules ] || command -v apd >/dev/null 2>&1; then
+    echo "APatch"
+    return
+  fi
+  # Magisk (incl. forks / compatibility layers)
+  if command -v magisk >/dev/null 2>&1 || [ -d /data/adb/magisk ] || [ -f /data/adb/magisk.db ]; then
+    echo "Magisk/Compat"
+    return
+  fi
+  # SukiSU (best-effort)
+  if [ -d /data/adb/sukisu ] || command -v sukisu >/dev/null 2>&1; then
+    echo "SukiSU/Compat"
+    return
+  fi
+  echo "Unknown"
+}
+
+# Resolve a runnable debloater path if PATH/exec perms are broken
+resolve_debloater_path() {
+  # Prefer /system/bin when present
+  if [ -x /system/bin/debloater ]; then
+    echo "/system/bin/debloater"
+    return
+  fi
+  # Common module paths
+  if [ -x /data/adb/modules/debloater_systemless_x1/system/bin/debloater ]; then
+    echo "/data/adb/modules/debloater_systemless_x1/system/bin/debloater"
+    return
+  fi
+  if [ -x /data/adb/ksu/modules/debloater_systemless_x1/system/bin/debloater ]; then
+    echo "/data/adb/ksu/modules/debloater_systemless_x1/system/bin/debloater"
+    return
+  fi
+  if [ -x /data/adb/apatch/modules/debloater_systemless_x1/system/bin/debloater ]; then
+    echo "/data/adb/apatch/modules/debloater_systemless_x1/system/bin/debloater"
+    return
+  fi
+  # Boot-fallback copy (created by hotfix scripts)
+  if [ -x /data/local/tmp/debloater ]; then
+    echo "/data/local/tmp/debloater"
+    return
+  fi
+  echo ""
+}
+
+###############################################################################
+# Basic helpers
+###############################################################################
+
+log() {
+  mkdir -p "$LIST_DIR" 2>/dev/null
+  {
+    printf '%s ' "$(date +'%Y-%m-%d %H:%M:%S' 2>/dev/null || echo '?')"
+    echo "$*"
+  } >>"$DEBUG_LOG" 2>/dev/null
+}
+
+dbg() {
+  log "DEBUG: $*"
+}
+
+pause() {
+  printf 'Press Enter to continue...'
+  read _x 2>/dev/null
+}
+
+ensure_root() {
+  uid="$(id -u 2>/dev/null)"
+  if [ "$uid" != "0" ]; then
+    echo "[-] Please run from a root shell (su)."
+    exit 1
+  fi
+}
+
+ensure_list_dir() {
+  [ -d "$LIST_DIR" ] || mkdir -p "$LIST_DIR" 2>/dev/null
+}
+
+###############################################################################
+# Profile initialisation
+###############################################################################
+
+init_profiles() {
+  ensure_list_dir
+
+  # disable.list - default ColorOS CN debloat set
+  if [ ! -f "$LIST_DIR/disable.list" ]; then
+    cat >"$LIST_DIR/disable.list" <<'EOF'
+# NAME: disable
+# Default disable set for ColorOS 16 (CN).
+
+# Ads & store
+com.opos.ads
+com.heytap.market
+
+# CN browser
+com.heytap.browser
+com.coloros.browser
+
+# CN media & extras
+com.heytap.music
+com.heytap.reader
+com.heytap.pictorial
+com.coloros.video
+com.coloros.karaoke
+andes.oplus.documentsreader
+
+# Oppo ecosystem (consumer extras)
+com.heytap.accessory
+com.heytap.mydevices
+com.heytap.vip
+com.heytap.yoli
+com.oppo.ctautoregist
+com.oplus.contentportal
+com.oplus.pay
+com.oplus.omoji
+com.oplus.ocar
+com.heytap.opluscarlink
+EOF
+  fi
+
+  # breeno_minimal.list - All Breeno / AI components
+  if [ ! -f "$LIST_DIR/breeno_minimal.list" ]; then
+    cat >"$LIST_DIR/breeno_minimal.list" <<'EOF'
+# NAME: breeno_minimal
+# Breeno / AI related components.
+
+com.heytap.speechassist
+com.oplus.ovoicemanager
+com.oplus.ovoicemanager.wakeup
+com.oplus.aicall
+com.oplus.aiwriter
+com.oplus.aiwidgets
+com.oplus.aiunit
+com.oplus.obrain
+com.oplus.deepthinker
+com.oplus.metis
+com.oplus.matrix
+com.oplus.atlas
+EOF
+  fi
+
+  # cn_ecosystem.list - extended extras (user editable)
+  if [ ! -f "$LIST_DIR/cn_ecosystem.list" ]; then
+    cat >"$LIST_DIR/cn_ecosystem.list" <<'EOF'
+# NAME: cn_ecosystem
+# Extended CN ecosystem / preloaded apps (user editable).
+# Initially mirrors the default disable set.
+
+# Ads & store
+com.opos.ads
+com.heytap.market
+
+# CN browser
+com.heytap.browser
+com.coloros.browser
+
+# CN media & extras
+com.heytap.music
+com.heytap.reader
+com.heytap.pictorial
+com.coloros.video
+com.coloros.karaoke
+andes.oplus.documentsreader
+
+# Oppo ecosystem (consumer extras)
+com.heytap.accessory
+com.heytap.mydevices
+com.heytap.vip
+com.heytap.yoli
+com.oppo.ctautoregist
+com.oplus.contentportal
+com.oplus.pay
+com.oplus.omoji
+com.oplus.ocar
+com.heytap.opluscarlink
+EOF
+  fi
+
+  # coloros16_reference.list - doc only
+  if [ ! -f "$LIST_DIR/coloros16_reference.list" ]; then
+    cat >"$LIST_DIR/coloros16_reference.list" <<'EOF'
+# NAME: coloros16_reference
+# Reference list for ColorOS 16 CN packages.
+# For documentation / experimentation only.
+EOF
+  fi
+
+  # enabled.list - manual restore helper
+  if [ ! -f "$LIST_DIR/enabled.list" ]; then
+    cat >"$LIST_DIR/enabled.list" <<'EOF'
+# NAME: enabled
+# User-maintained list of packages to restore/keep enabled.
+EOF
+  fi
+
+  # disabled.list - dynamic log of what we actually disabled
+  if [ ! -f "$LIST_DIR/disabled.list" ]; then
+    cat >"$LIST_DIR/disabled.list" <<'EOF'
+# NAME: disabled
+# Auto-generated list of packages that this module has actually disabled.
+# Used for safe full restore.
+EOF
+  fi
+
+  # CN_bloat-list.list - reference master list for user copy
+  if [ ! -f "$LIST_DIR/CN_bloat-list.list" ]; then
+    cat >"$LIST_DIR/CN_bloat-list.list" <<'EOF'
+# NAME: CN_bloat-list
+# CN bloat reference list for ColorOS 16 (CN) by Ox1d3x3
+# You can copy entries from here into disable.list or cn_ecosystem.list
+
+# =======================
+# Ads & Store
+# =======================
+com.opos.ads
+com.heytap.market
+
+# =======================
+# CN Browser / Web
+# =======================
+com.heytap.browser
+com.coloros.browser
+
+# =======================
+# CN Media & Extras
+# =======================
+com.heytap.music
+com.heytap.reader
+com.heytap.pictorial
+com.coloros.video
+com.coloros.karaoke
+andes.oplus.documentsreader
+
+# =======================
+# Oppo / OPlus Ecosystem & Services
+# =======================
+com.heytap.accessory
+com.heytap.mydevices
+com.heytap.vip
+com.heytap.yoli
+com.oppo.ctautoregist
+com.oplus.contentportal
+com.oplus.pay
+com.oplus.omoji
+com.oplus.ocar
+com.heytap.opluscarlink
+
+# =======================
+# Breeno / AI (for reference)
+# =======================
+com.heytap.speechassist
+com.oplus.ovoicemanager
+com.oplus.ovoicemanager.wakeup
+com.oplus.aicall
+com.oplus.aiwriter
+com.oplus.aiwidgets
+com.oplus.aiunit
+com.oplus.obrain
+com.oplus.deepthinker
+com.oplus.metis
+com.oplus.matrix
+com.oplus.atlas
+
+EOF
+  fi
+}
+
+###############################################################################
+# Banner
+###############################################################################
+
+print_banner() {
+  DEVICE="$(getprop ro.product.model 2>/dev/null)"
+  [ -z "$DEVICE" ] && DEVICE="$(getprop ro.product.device 2>/dev/null)"
+  [ -z "$DEVICE" ] && DEVICE="Unknown"
+
+  ANDROID="$(getprop ro.build.version.release 2>/dev/null)"
+  [ -z "$ANDROID" ] && ANDROID="Unknown"
+
+  ROOTMGR="$(detect_root_manager 2>/dev/null)"
+  [ -z "$ROOTMGR" ] && ROOTMGR="Unknown"
+
+  clear 2>/dev/null
+  cat <<EOF
+====================================================
+        Debloater - Oppo/ColorOS (CN) by Ox1d3x3
+                 Version ${MOD_VER}
+                 Github: @ox1d3x3
+                   __   __  __
+                  \\ \\ / / /_ |
+                   \\ V /   | |
+                    > <    | |
+                   / . \\   | |
+                  /_/ \\_\\  |_|
+====================================================
+ Device   : ${DEVICE}
+ Android  : ${ANDROID}
+ List dir : ${LIST_DIR}
+ ModuleID : ${MODULE_ID}
+ Debug log: ${DEBUG_LOG}
+====================================================
+
+EOF
+}
+
+###############################################################################
+# Tracking helpers
+###############################################################################
+
+record_disabled_pkg() {
+  pkg="$1"
+  [ -z "$pkg" ] && return 0
+  ensure_list_dir
+  if [ ! -f "$LIST_DIR/disabled.list" ]; then
+    echo "# NAME: disabled" >"$LIST_DIR/disabled.list"
+  fi
+  if ! grep -qx "$pkg" "$LIST_DIR/disabled.list" 2>/dev/null; then
+    printf '%s
+' "$pkg" >>"$LIST_DIR/disabled.list"
+  fi
+}
+
+record_enabled_pkg() {
+  pkg="$1"
+  [ -z "$pkg" ] && return 0
+  ensure_list_dir
+  if [ ! -f "$LIST_DIR/enabled.list" ]; then
+    echo "# NAME: enabled" >"$LIST_DIR/enabled.list"
+  fi
+  if ! grep -qx "$pkg" "$LIST_DIR/enabled.list" 2>/dev/null; then
+    printf '%s
+' "$pkg" >>"$LIST_DIR/enabled.list"
+  fi
+}
+
+###############################################################################
+# Core pm wrappers
+###############################################################################
+
+disable_pkg_triple() {
+  pkg="$1"
+  dbg "DISABLE_ENTER pkg='$pkg'"
+
+  rc_du=1
+  rc_d=1
+  rc_s=1
+
+  pm disable-user --user 0 "$pkg" >/dev/null 2>&1
+  rc_du=$?
+  if [ "$rc_du" -eq 0 ]; then
+    echo " - pm disable-user OK"
+  else
+    echo " - pm disable-user FAILED"
+  fi
+  dbg "DISABLE_ACT pm_disable_user rc=$rc_du pkg='$pkg'"
+
+  pm disable "$pkg" >/dev/null 2>&1
+  rc_d=$?
+  if [ "$rc_d" -eq 0 ]; then
+    echo " - pm disable OK"
+  else
+    echo " - pm disable FAILED"
+  fi
+  dbg "DISABLE_ACT pm_disable rc=$rc_d pkg='$pkg'"
+
+  cmd package suspend --user 0 "$pkg" >/dev/null 2>&1
+  rc_s=$?
+  if [ "$rc_s" -eq 0 ]; then
+    echo " - cmd package suspend OK"
+  else
+    echo " - cmd package suspend FAILED"
+  fi
+  dbg "DISABLE_ACT cmd_suspend rc=$rc_s pkg='$pkg'"
+
+  if [ "$rc_du" -eq 0 ] || [ "$rc_d" -eq 0 ] || [ "$rc_s" -eq 0 ]; then
+    echo " - status: disabled/suspended"
+    record_disabled_pkg "$pkg"
+    dbg "DISABLE_POST pkg='$pkg' rc=0"
+    return 0
+  fi
+
+  if pm list packages 2>/dev/null | sed 's/^package://g' | grep -qx "$pkg"; then
+    echo " - status: installed but could not be disabled (check manually)"
+    dbg "DISABLE_POST pkg='$pkg' rc=1 (pm refused)"
+    return 1
+  else
+    echo " - status: not installed (skip)"
+    dbg "DISABLE_POST pkg='$pkg' rc=2 (not installed)"
+    return 2
+  fi
+}
+
+enable_pkg_triple() {
+  pkg="$1"
+  dbg "ENABLE_ENTER pkg='$pkg'"
+
+  rc_e=1
+  rc_eu=1
+  rc_u=1
+
+  pm enable "$pkg" >/dev/null 2>&1
+  rc_e=$?
+  if [ "$rc_e" -eq 0 ]; then
+    echo " - pm enable OK"
+  else
+    echo " - pm enable FAILED"
+  fi
+  dbg "ENABLE_ACT pm_enable rc=$rc_e pkg='$pkg'"
+
+  pm enable --user 0 "$pkg" >/dev/null 2>&1
+  rc_eu=$?
+  if [ "$rc_eu" -eq 0 ]; then
+    echo " - pm enable --user 0 OK"
+  else
+    echo " - pm enable --user 0 FAILED"
+  fi
+  dbg "ENABLE_ACT pm_enable_user rc=$rc_eu pkg='$pkg'"
+
+  cmd package unsuspend --user 0 "$pkg" >/dev/null 2>&1
+  rc_u=$?
+  if [ "$rc_u" -eq 0 ]; then
+    echo " - cmd package unsuspend OK"
+  else
+    echo " - cmd package unsuspend FAILED"
+  fi
+  dbg "ENABLE_ACT cmd_unsuspend rc=$rc_u pkg='$pkg'"
+
+  if [ "$rc_e" -eq 0 ] || [ "$rc_eu" -eq 0 ] || [ "$rc_u" -eq 0 ]; then
+    echo " - status: enabled/unsuspended"
+    record_enabled_pkg "$pkg"
+    dbg "ENABLE_POST pkg='$pkg' rc=0"
+    return 0
+  fi
+
+  if pm list packages 2>/dev/null | sed 's/^package://g' | grep -qx "$pkg"; then
+    echo " - status: installed but still disabled (check manually)"
+    dbg "ENABLE_POST pkg='$pkg' rc=1 (pm refused)"
+    return 1
+  else
+    echo " - status: not installed (skip)"
+    dbg "ENABLE_POST pkg='$pkg' rc=2 (not installed)"
+    return 2
+  fi
+}
+
+###############################################################################
+# List handling (file -> space-separated list -> for-loop)
+###############################################################################
+
+build_pkg_list_from_file() {
+  file="$1"
+  dbg "BUILD_LIST file='$file'"
+
+  if [ ! -f "$file" ]; then
+    echo ""
+    return
+  fi
+
+  sed -e 's/\r$//' "$file" \
+    | sed -e 's/#.*$//' \
+    | tr '\t' ' ' \
+    | sed -e 's/^[[:space:]]*//' -e 's/[[:space:]]*$//' \
+    | sed -e '/^$/d' \
+    | tr '\n' ' '
+}
+
+apply_disable_from_profile() {
+  profile="$1"
+  dbg "APPLY_DISABLE profile='$profile'"
+
+  if [ ! -f "$profile" ]; then
+    echo "Profile not found: $profile"
+    return 1
+  fi
+
+  pkg_list="$(build_pkg_list_from_file "$profile")"
+
+  if [ -z "$pkg_list" ]; then
+    echo "No packages found inside: $profile"
+    return 1
+  fi
+
+  total=0
+  disabled=0
+  skipped=0
+  failed=0
+
+  echo
+  echo "Disable packages (profile)"
+  echo "--------------------------"
+  echo "Profile file: $profile"
+  echo
+
+  for pkg in $pkg_list; do
+    [ -z "$pkg" ] && continue
+    total=$((total + 1))
+    echo ">>> $pkg"
+    disable_pkg_triple "$pkg"
+    case "$?" in
+      0) disabled=$((disabled + 1));;
+      2) skipped=$((skipped + 1));;
+      *) failed=$((failed + 1));;
+    esac
+    echo
+  done
+
+  echo "Summary:"
+  echo "  targets                  : $total"
+  echo "  likely disabled/suspended: $disabled"
+  echo "  skipped (not installed)  : $skipped"
+  echo "  unknown/fail             : $failed"
+  echo
+}
+
+apply_enable_from_profile() {
+  profile="$1"
+  dbg "APPLY_ENABLE profile='$profile'"
+
+  if [ ! -f "$profile" ]; then
+    echo "Profile not found: $profile"
+    return 1
+  fi
+
+  pkg_list="$(build_pkg_list_from_file "$profile")"
+
+  if [ -z "$pkg_list" ]; then
+    echo "No packages found inside: $profile"
+    return 1
+  fi
+
+  total=0
+  enabled=0
+  skipped=0
+  failed=0
+
+  echo
+  echo "Restore packages (profile)"
+  echo "--------------------------"
+  echo "Profile file: $profile"
+  echo
+
+  for pkg in $pkg_list; do
+    [ -z "$pkg" ] && continue
+    total=$((total + 1))
+    echo ">>> $pkg"
+    enable_pkg_triple "$pkg"
+    case "$?" in
+      0) enabled=$((enabled + 1));;
+      2) skipped=$((skipped + 1));;
+      *) failed=$((failed + 1));;
+    esac
+    echo
+  done
+
+  echo "Summary:"
+  echo "  targets      : $total"
+  echo "  enabled      : $enabled"
+  echo "  skipped      : $skipped"
+  echo "  unknown/fail : $failed"
+  echo
+}
+
+###############################################################################
+# Feature actions
+###############################################################################
+
+default_optimize_action() {
+  echo
+  echo "Default Optimise apps (Default selected apps)"
+  echo "--------------------------------------------"
+  echo "This will disable a curated set of ColorOS CN bloat:"
+  echo " - Ads, store, CN browser, media, and ecosystem extras"
+  echo
+
+  optimize_pkgs="
+com.opos.ads
+com.heytap.market
+com.heytap.browser
+com.coloros.browser
+com.heytap.music
+com.heytap.reader
+com.heytap.pictorial
+com.coloros.video
+com.coloros.karaoke
+andes.oplus.documentsreader
+com.heytap.accessory
+com.heytap.mydevices
+com.heytap.vip
+com.heytap.yoli
+com.oppo.ctautoregist
+com.oplus.contentportal
+com.oplus.pay
+com.oplus.omoji
+com.oplus.ocar
+com.heytap.opluscarlink
+"
+
+  total=0
+  disabled=0
+  skipped=0
+  failed=0
+
+  for pkg in $optimize_pkgs; do
+    [ -z "$pkg" ] && continue
+    total=$((total + 1))
+    echo ">>> $pkg"
+    disable_pkg_triple "$pkg"
+    case "$?" in
+      0) disabled=$((disabled + 1));;
+      2) skipped=$((skipped + 1));;
+      *) failed=$((failed + 1));;
+    esac
+    echo
+  done
+
+  echo "Default Optimize Apps summary:"
+  echo "  targets                  : $total"
+  echo "  likely disabled/suspended: $disabled"
+  echo "  skipped (not installed)  : $skipped"
+  echo "  unknown/fail             : $failed"
+  echo
+}
+
+force_breeno_action() {
+  echo
+  echo "Force Breeno Disable (Disable all Breeno AI packages)"
+  echo "-----------------------------------------------------"
+
+  breeno_pkgs="
+com.heytap.speechassist
+com.oplus.ovoicemanager
+com.oplus.ovoicemanager.wakeup
+com.oplus.aicall
+com.oplus.aiwriter
+com.oplus.aiwidgets
+com.oplus.aiunit
+com.oplus.obrain
+com.oplus.deepthinker
+com.oplus.metis
+com.oplus.matrix
+com.oplus.atlas
+"
+
+  total=0
+  disabled=0
+  skipped=0
+  failed=0
+
+  for pkg in $breeno_pkgs; do
+    [ -z "$pkg" ] && continue
+    total=$((total + 1))
+    echo ">>> $pkg"
+    disable_pkg_triple "$pkg"
+    case "$?" in
+      0) disabled=$((disabled + 1));;
+      2) skipped=$((skipped + 1));;
+      *) failed=$((failed + 1));;
+    esac
+    echo
+  done
+
+  echo "Force Breeno summary:"
+  echo "  targets                  : $total"
+  echo "  likely disabled/suspended: $disabled"
+  echo "  skipped (not installed)  : $skipped"
+  echo "  unknown/fail             : $failed"
+  echo
+  echo "Note: Some ROMs may re-enable parts of Breeno after OTA or reboot."
+  echo "      Re-run this option if you see it come back."
+  echo
+}
+
+manual_disable_menu() {
+  echo
+  echo "Disable Packages (Manual using disable or disabled list)"
+  echo "--------------------------------------------------------"
+  echo "  1) disable.list        (Default disable set - ColorOS 16 CN)"
+  echo "  2) disabled.list       (Dynamic log of actually disabled apps)"
+  echo "  3) cn_ecosystem.list   (Extended CN ecosystem - user editable)"
+  echo "  4) breeno_minimal.list (Breeno / AI minimal)"
+  echo "  0) Back"
+  echo
+  printf 'Choice: '
+  read ans 2>/dev/null
+
+  case "$ans" in
+    1) profile="$LIST_DIR/disable.list" ;;
+    2) profile="$LIST_DIR/disabled.list" ;;
+    3) profile="$LIST_DIR/cn_ecosystem.list" ;;
+    4) profile="$LIST_DIR/breeno_minimal.list" ;;
+    0) return ;;
+    *) echo "Invalid choice."; return ;;
+  esac
+
+  apply_disable_from_profile "$profile"
+}
+
+manual_restore_menu() {
+  echo
+  echo "Restore Packages (Manual restore from enabled or disabled list)"
+  echo "---------------------------------------------------------------"
+  echo "  1) enabled.list   (Manual restore helper list)"
+  echo "  2) disabled.list  (Everything this module has disabled)"
+  echo "  3) disable.list   (Default profile - restore those)"
+  echo "  0) Back"
+  echo
+  printf 'Choice: '
+  read ans 2>/dev/null
+
+  case "$ans" in
+    1) profile="$LIST_DIR/enabled.list" ;;
+    2) profile="$LIST_DIR/disabled.list" ;;
+    3) profile="$LIST_DIR/disable.list" ;;
+    0) return ;;
+    *) echo "Invalid choice."; return ;;
+  esac
+
+  apply_enable_from_profile "$profile"
+}
+
+full_restore_action() {
+  echo
+  echo "Full Restore"
+  echo "------------"
+  echo "This will restore ALL packages affected by:"
+  echo " - Default Optimise"
+  echo " - Breeno Disable (full suite)"
+  echo
+
+  # Union of both action lists (hard-coded)
+  restore_pkgs="
+com.opos.ads
+com.heytap.market
+com.heytap.browser
+com.coloros.browser
+com.heytap.music
+com.heytap.reader
+com.heytap.pictorial
+com.coloros.video
+com.coloros.karaoke
+andes.oplus.documentsreader
+com.heytap.accessory
+com.heytap.mydevices
+com.heytap.vip
+com.heytap.yoli
+com.oppo.ctautoregist
+com.oplus.contentportal
+com.oplus.pay
+com.oplus.omoji
+com.oplus.ocar
+com.heytap.opluscarlink
+
+com.heytap.speechassist
+com.oplus.ovoicemanager
+com.oplus.ovoicemanager.wakeup
+com.oplus.aicall
+com.oplus.aiwriter
+com.oplus.aiwidgets
+com.oplus.aiunit
+com.oplus.obrain
+com.oplus.deepthinker
+com.oplus.metis
+com.oplus.matrix
+com.oplus.atlas
+"
+
+  total=0
+  enabled=0
+  skipped=0
+  failed=0
+
+  for pkg in $restore_pkgs; do
+    [ -z "$pkg" ] && continue
+    total=$((total + 1))
+    echo ">>> $pkg"
+    enable_pkg_triple "$pkg"
+    case "$?" in
+      0) enabled=$((enabled + 1));;
+      2) skipped=$((skipped + 1));;
+      *) failed=$((failed + 1));;
+    esac
+    echo
+  done
+
+  echo "Full Restore summary:"
+  echo "  targets      : $total"
+  echo "  enabled      : $enabled"
+  echo "  skipped      : $skipped"
+  echo "  unknown/fail : $failed"
+  echo
+}
+
+list_all_packages() {
+  echo
+  echo "All installed packages (sorted):"
+  echo "--------------------------------"
+  pm list packages 2>/dev/null | sed 's/^package://g' | sort
+  echo
+}
+
+list_disabled_packages() {
+  echo
+  echo "All disabled packages (sorted):"
+  echo "--------------------------------"
+  pm list packages -d 2>/dev/null | sed 's/^package://g' | sort
+  echo
+}
+
+check_updates_action() {
+  echo
+  echo "Check updates"
+  echo "-------------"
+  echo "Current version : ${MOD_VER}"
+  echo "Module ID       : ${MODULE_ID}"
+  echo "GitHub          : @ox1d3x3 (check manually for newer release)"
+  echo
+}
+
+###############################################################################
+# AdGuard DNS helper (Private DNS)
+###############################################################################
+
+adguard_dns_menu() {
+  echo
+  echo "AdGuard DNS (Private DNS helper)"
+  echo "--------------------------------"
+
+  if ! command -v settings >/dev/null 2>&1; then
+    echo "The 'settings' tool is not available on this ROM."
+    echo "Cannot manage Private DNS programmatically."
+    echo
+    return
+  fi
+
+  current_mode="$(settings get global private_dns_mode 2>/dev/null)"
+  current_spec="$(settings get global private_dns_specifier 2>/dev/null)"
+
+  [ -z "$current_mode" ] && current_mode="(unset)"
+  [ -z "$current_spec" ] && current_spec="(none)"
+
+  echo "Current Private DNS mode : $current_mode"
+  echo "Current Private DNS host : $current_spec"
+  echo
+  echo "Options:"
+  echo "  1) Set AdGuard DNS (dns.adguard-dns.com)"
+  echo "  2) Set AdGuard Family DNS (family.adguard-dns.com)"
+  echo "  3) Reset to Automatic (Android default / opportunistic)"
+  echo "  0) Back"
+  echo
+  printf 'Choice: '
+  read ans 2>/dev/null
+
+  case "$ans" in
+    1)
+      echo "Setting Private DNS to AdGuard (dns.adguard-dns.com)..."
+      settings put global private_dns_mode hostname >/dev/null 2>&1
+      settings put global private_dns_specifier "dns.adguard-dns.com" >/dev/null 2>&1
+      ;;
+    2)
+      echo "Setting Private DNS to AdGuard Family (family.adguard-dns.com)..."
+      settings put global private_dns_mode hostname >/dev/null 2>&1
+      settings put global private_dns_specifier "family.adguard-dns.com" >/dev/null 2>&1
+      ;;
+    3)
+      echo "Resetting Private DNS to Automatic (opportunistic)..."
+      settings put global private_dns_mode opportunistic >/dev/null 2>&1
+      settings put global private_dns_specifier "" >/dev/null 2>&1
+      ;;
+    0)
+      return
+      ;;
+    *)
+      echo "Invalid choice."
+      return
+      ;;
+  esac
+
+  new_mode="$(settings get global private_dns_mode 2>/dev/null)"
+  new_spec="$(settings get global private_dns_specifier 2>/dev/null)"
+  echo
+  echo "Updated Private DNS mode : ${new_mode:-'(unset)'}"
+  echo "Updated Private DNS host : ${new_spec:-'(none)'}"
+  echo
+}
+
+###############################################################################
+# Main menu
+###############################################################################
+
+main_menu() {
+  while :; do
+    print_banner
+    echo "Main menu"
+    echo "---------"
+    echo "  1. Default Optimise apps (Default selected apps)"
+    echo "  2. Disable Packages (Manual using disable or disabled list)"
+    echo "  3. Force Breeno Disable (Disable all Breeno AI packages)"
+    echo "  4. Restore Packages (Manual restore from enable or enabled list)"
+    echo "  5. Full Restore (Restore Default Optimise + Breeno suite)"
+    echo "  6. List All installed Packages"
+    echo "  7. List all disabled packages"
+    echo "  8. AdGuard DNS (Private DNS helper)"
+    echo "  9. Check updates"
+    echo "  0. Exit"
+    echo
+    printf 'Choice: '
+    read choice 2>/dev/null
+
+    case "$choice" in
+      1) default_optimize_action; pause ;;
+      2) manual_disable_menu;     pause ;;
+      3) force_breeno_action;     pause ;;
+      4) manual_restore_menu;     pause ;;
+      5) full_restore_action;     pause ;;
+      6) list_all_packages;       pause ;;
+      7) list_disabled_packages;  pause ;;
+      8) adguard_dns_menu;        pause ;;
+      9) check_updates_action;    pause ;;
+      0) echo "Exit."; exit 0 ;;
+      *) echo "Invalid choice."; pause ;;
+    esac
+  done
+}
+
+###############################################################################
+# CLI entry (non-interactive)
+#   debloater --default
+#   debloater --breeno
+#   debloater --dns adguard|family|auto
+###############################################################################
+
+cli_run() {
+  case "$1" in
+    --default|default)
+      default_optimize_action
+      return 0
+      ;;
+    --breeno|breeno)
+      force_breeno_action
+      return 0
+      ;;
+    --full-restore|--fullrestore|full-restore|fullrestore)
+      full_restore_action
+      return 0
+      ;;
+    --dns|dns)
+      # default: adguard
+      mode="${2:-adguard}"
+      case "$mode" in
+        adguard|1)
+          echo "Setting Private DNS to AdGuard (dns.adguard-dns.com)..."
+          settings put global private_dns_mode hostname >/dev/null 2>&1
+          settings put global private_dns_specifier "dns.adguard-dns.com" >/dev/null 2>&1
+          ;;
+        family|2)
+          echo "Setting Private DNS to AdGuard Family (family.adguard-dns.com)..."
+          settings put global private_dns_mode hostname >/dev/null 2>&1
+          settings put global private_dns_specifier "family.adguard-dns.com" >/dev/null 2>&1
+          ;;
+        auto|reset|3)
+          echo "Resetting Private DNS to Automatic (opportunistic)..."
+          settings put global private_dns_mode opportunistic >/dev/null 2>&1
+          settings put global private_dns_specifier "" >/dev/null 2>&1
+          ;;
+        *)
+          echo "Unknown DNS mode: $mode"
+          echo "Valid: adguard | family | auto"
+          return 2
+          ;;
+      esac
+      echo
+      new_mode="$(settings get global private_dns_mode 2>/dev/null)"
+      new_spec="$(settings get global private_dns_specifier 2>/dev/null)"
+      echo "Private DNS mode : ${new_mode:-'(unset)'}"
+      echo "Private DNS host : ${new_spec:-'(none)'}"
+      return 0
+      ;;
+    --help|-h|help)
+      echo "Debloater by Ox1d3x3 ($MOD_VER)"
+      echo "Usage:"
+      echo "  debloater --default"
+      echo "  debloater --breeno"
+      echo "  debloater --full-restore"
+      echo "  debloater --dns adguard|family|auto"
+      return 0
+      ;;
+  esac
+  return 1
+}
+
+if [ $# -gt 0 ]; then
+  ensure_root
+  init_profiles
+  if cli_run "$@"; then
+    exit 0
+  fi
+fi
+
+###############################################################################
+# Entry
+###############################################################################
+
+ensure_root
+init_profiles
+main_menu
