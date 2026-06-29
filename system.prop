@@ -1,0 +1,90 @@
+# BatterySaver & Debloater v1.0 -- system.prop
+# Applied by Magisk BEFORE init runs -- sets persist props early.
+# midasd.rc reads persist.sys.midasd.enable on boot_completed
+# and stops midasd before service.sh even runs.
+
+# -----------------------------------------------
+# [v1.3+] midasd NATIVE DAEMON kill switch
+# midasd.rc has: on property:sys.boot_completed=1 &&
+#                   property:persist.sys.midasd.enable=0 -> stop midasd
+# This is the EARLIEST possible kill -- before service.sh runs
+# -----------------------------------------------
+persist.sys.midasd.enable=0
+persist.sys.midasd.start=0
+
+# -----------------------------------------------
+# oplus_gaia AI daemon — keep active for AI & Circle to Search
+# -----------------------------------------------
+persist.sys.oplus.gaia.enable=1
+
+# -----------------------------------------------
+# Logger / Telemetry — hard disable at prop level
+# -----------------------------------------------
+persist.sys.debuglog.config=
+persist.vendor.aee.log.status=0
+persist.vendor.aeev.log.status=0
+persist.sys.log.tcpdump=0
+persist.sys.log.user=0
+persist.sys.oppo.junklog=false
+persist.sys.log.main=0
+persist.sys.log.kernel=0
+persist.sys.log.radio=0
+
+# -----------------------------------------------
+# Profiler & Debug overhead — disable
+# -----------------------------------------------
+debug.atrace.tags.enableflags=0
+profiler.debugmonitor=false
+persist.sys.strictmode.disable=1
+dalvik.vm.checkjni=false
+
+# -----------------------------------------------
+# GMS / Play Services idle hint
+# -----------------------------------------------
+persist.sys.gms.idle.enabled=1
+
+# -----------------------------------------------
+# CPU/GPU idle hints for MTK
+# -----------------------------------------------
+persist.vendor.mtk.power.hal.default.debug=0
+vendor.debug.mdlog.autostart=0
+vendor.connsys.driver.ready=yes
+
+# -----------------------------------------------
+# WiFi reduce scan aggressiveness
+# -----------------------------------------------
+wifi.interface.default.scan.cache.disable=1
+persist.wifi.scan.interval=300
+
+# -----------------------------------------------
+# Doze / Idle deeper on AOSP
+# -----------------------------------------------
+ro.config.low_ram=false
+persist.sys.doze.mode=1
+
+# -----------------------------------------------
+# [v1.8] OPlus Heavy Logging & Tracing Disable
+# These were disabled via resetprop to avoid
+# early init crashes while saving idle battery.
+# -----------------------------------------------
+ro.logd.flowctrl.on=0
+ro.logd.flowctrl.method=0
+ro.logd.flowctrl.quota.rows=0
+ro.logd.flowctrl.quota.size=0
+persist.logd.flowctrl.on=0
+persist.logd.flowctrl.method=0
+persist.logd.flowctrl.quota.rows=0
+persist.logd.flowctrl.quota.size=0
+log.tag.DeviceStatisticsService=SUPPRESS
+ro.oppo.ad_test_sys=0
+persist.sys.log.event=0|0
+persist.sys.oppo.junkmonitor=false
+persist.sys.oplusdebug.tpcatcher=0
+persist.anr.dumpthr=0
+ro.dumpenvironment.time=0
+persist.sys.log.lfeh.test=false
+persist.sys.log.lfeh.default=false
+persist.sys.log.lfeh=false
+persist.sys.log.lfeh.delete=true
+debug.onetrace.tag=
+debug.onetrace.native.tag=

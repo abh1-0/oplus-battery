@@ -1,0 +1,6 @@
+id=combined_debloat_battery
+name=Ultra Battery Saver & Systemless Debloater
+version=v1.0
+versionCode=100
+author=abh1
+description=The ultimate battery optimization and systemless debloater module! Slashes idle drain, halts heavy background telemetry, optimizes kernel efficiency, and maximizes deep sleep on BBK ports (ColorOS / OxygenOS).
