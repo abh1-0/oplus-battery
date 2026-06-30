@@ -123,5 +123,5 @@ Join the group for updates, support, and discussions:
 
 # 👤 Credits
 
-- **Fork Developer / Maintainer:** [abh1](https://t.me/op9devs)
-- **Original Developer:** [Ayan (@imnotaino)](https://t.me/imnotaino) (Support: [t.me/colorosmodules](https://t.me/colorosmodules))
+- **Fork Developer / Maintainer:** [abh1](https://t.me/abh1-0)
+- **Original Developer:** [Ayan (@imnotaino)](https://t.me/imnotaino) 
